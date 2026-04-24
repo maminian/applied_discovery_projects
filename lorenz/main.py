@@ -15,16 +15,39 @@ def rhs(t,y, sigma=10, rho=28, beta=8/3):
 t = np.linspace(0, 20,1000)
 sol = sp.integrate.solve_ivp(rhs, t[[0,-1]], [1,2,3], t_eval = t)
 
-X = tools.poly_design_from_data( sol.y.T )
-y = np.array([rhs(0,xi) for xi in sol.y.T]) # for now: exact derivatives.
-d = y.shape[1]
+h = sol.t[1] - sol.t[0]
 
-lassoooo = linear_model.Lasso(alpha=1, fit_intercept=False)
+#
 
-lassoooo.fit(X,y)
-_w = lassoooo.coef_
-new_rhs = tools.ode_rhs_generator(lassoooo.coef_)
+####
+# Design matrix
+Phi = tools.poly_design_from_data( sol.y.T )
+
+
+if True:
+    # Direct numerical diff.
+    y = np.array([rhs(0,xi) for xi in sol.y.T]) # for now: exact derivatives.
     
+    y = (sol.y.T[2:] - sol.y.T[:-2])/(2*h)
+    lstsq_sol = np.linalg.lstsq(Phi[1:-1], y)
+    new_coef = lstsq_sol[0]
+else:
+    # Weak formulation.
+    A = np.zeros((Phi.shape[0]-2, Phi.shape[1]))
+    DU = np.zeros((Phi.shape[0]-2,3))
+
+    for i in range(A.shape[0]):
+        A[i] = h/12 * (3*Phi[i] + 10*Phi[i+1] + 3*Phi[i+2])
+        DU[i] = 2/3*(sol.y.T[i+2] - sol.y.T[i])
+    #
+    lstsq_sol = np.linalg.lstsq(A, DU)
+    new_coef = lstsq_sol[0]
+#
+
+#
+# Reconstruct a new trajectory (forward error?)
+new_rhs = tools.ode_rhs_generator(new_coef.T)
+
 resol = sp.integrate.solve_ivp(new_rhs, t[[0,-1]], [1,2,3], t_eval=t)
 
 
@@ -32,10 +55,11 @@ resol = sp.integrate.solve_ivp(new_rhs, t[[0,-1]], [1,2,3], t_eval=t)
 
 if __name__=="__main__":
     print('learned ODE:')
+    # at a very coarse level, we do well:
+    print(np.round(new_coef.T,1))
     from matplotlib import pyplot as plt
     
-    tools.print_ode(_w, print_precision=2)
-
+    #tools.print_ode(_w, print_precision=2)
     fig,ax = plt.subplots()
 
     ax.plot(sol.t, sol.y.T, label='original solution')
