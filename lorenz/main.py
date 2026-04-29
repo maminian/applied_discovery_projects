@@ -24,19 +24,22 @@ h = sol.t[1] - sol.t[0]
 # Design matrix
 def paramsweep_fun(N=30):
     #N = 30 # go up until this index.
-    Phi = tools.poly_design_from_data( sol.y.T )
+    
+    # Question: for an *ensemble* of simulated initial conditions, 
+    # how does the solution of the aggregated problem do in simulating 
+    # 3 training periods out for an unseen initial condition?
+    # Right now: we're "stacking" weak-form systems followed by an OLS solve 
+    # to do this. Might not be the best way!
+    As = []
+    DUs = []
+    for _ in range(10):
+        sol = sp.integrate.solve_ivp(rhs, t[[0,-1]], np.random.normal([1,1,1],4), t_eval = t)
 
-    Phi = Phi[:N]
-    Y = sol.y.T[:N]
+        Phi = tools.poly_design_from_data( sol.y.T )
 
+        Phi = Phi[:N]
+        Y = sol.y.T[:N]
 
-    if False:
-        # Direct numerical diff.
-
-        y = (Y[2:] - Y[:-2])/(2*h)
-        lstsq_sol = np.linalg.lstsq(Phi[1:-1], y)
-        new_coef = lstsq_sol[0]
-    else:
         # Weak formulation.
         A = np.zeros((Phi.shape[0]-2, Phi.shape[1]))
         DU = np.zeros((Phi.shape[0]-2,3))
@@ -45,18 +48,23 @@ def paramsweep_fun(N=30):
             A[i] = h/12 * (3*Phi[i] + 10*Phi[i+1] + 3*Phi[i+2])
             DU[i] = 2/3*(Y[i+2] - Y[i])
         #
-        lstsq_sol = np.linalg.lstsq(A, DU)
-        new_coef = lstsq_sol[0]
+        As.append(A)
+        DUs.append(DU)
     #
-
+    
+    A_stack = np.vstack(As)
+    DU_stack = np.vstack(DUs)
+    
+    lstsq_sol = np.linalg.lstsq(A_stack, DU_stack)
+    new_coef = lstsq_sol[0]
+    
     #
     # Reconstruct a new trajectory (forward error?)
     new_rhs = tools.ode_rhs_generator(new_coef.T)
 
-        sol2 = sp.integrate.solve_ivp(rhs, t[[0,-1]], [4,13,17], t_eval = t)
-        resol = sp.integrate.solve_ivp(new_rhs, t[[0,-1]], [4,13,17], t_eval=t)
-
-
+    # Samuel gave me this initial condition.
+    sol2 = sp.integrate.solve_ivp(rhs, t[[0,-1]], [4,13,17], t_eval = t)
+    resol = sp.integrate.solve_ivp(new_rhs, t[[0,-1]], [4,13,17], t_eval=t)
 
     #print(np.round(new_coef.T,1))
 
@@ -64,18 +72,20 @@ def paramsweep_fun(N=30):
     ################################
 
     #Strategy: in chunked units in time, e.g. 0-2, 2-4, etc;
-    # (or maybe focus in row numbers...i=0-100; i=101-200, etc)
+    # (or maybe focus in row numbers...i=0 to N-1; i=N to 2N-1, etc)
     # RMSE; or whatever, between, the exact (x,y,z) and the 
     # reproduced (x,y,z); understanding. 
 
+    # TODO: cleaner implementation
     df = pd.DataFrame(resol.y.T - sol2.y.T, columns=['x', 'y', 'z'])
-    
     errors = [np.sqrt((row**2).sum().sum()/(3*N)) for row in df.rolling(window=N, step=N)]
     
-    return errors[3] # for now
+    # success metric for now; note errors[1] 
+    # theoretically covers the training period plus one
+    return errors[3] 
 #
 
-inputs = np.arange(30,300, dtype=int)
+inputs = np.arange(30,150, dtype=int) # expand to 300 if you want; takes some time
 outputs = np.zeros(np.shape(inputs))
 for i in range(len(inputs)):
     try:
