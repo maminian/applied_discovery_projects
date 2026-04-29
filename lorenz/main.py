@@ -13,7 +13,7 @@ def rhs(t,y, sigma=10, rho=28, beta=8/3):
     return np.array([sigma*(y[1]-y[0]), y[0]*(rho-y[2])-y[1], y[0]*y[1]-beta*y[2]])
 #
 
-t = np.linspace(0,40,2000)
+t = np.linspace(0,20,1000)
 sol = sp.integrate.solve_ivp(rhs, t[[0,-1]], [1,2,3], t_eval = t)
 
 h = sol.t[1] - sol.t[0]
@@ -53,7 +53,8 @@ def paramsweep_fun(N=30):
     # Reconstruct a new trajectory (forward error?)
     new_rhs = tools.ode_rhs_generator(new_coef.T)
 
-    resol = sp.integrate.solve_ivp(new_rhs, t[[0,-1]], [1,2,3], t_eval=t)
+        sol2 = sp.integrate.solve_ivp(rhs, t[[0,-1]], [4,13,17], t_eval = t)
+        resol = sp.integrate.solve_ivp(new_rhs, t[[0,-1]], [4,13,17], t_eval=t)
 
 
 
@@ -67,7 +68,8 @@ def paramsweep_fun(N=30):
     # RMSE; or whatever, between, the exact (x,y,z) and the 
     # reproduced (x,y,z); understanding. 
 
-    df = pd.DataFrame(resol.y.T - sol.y.T, columns=['x', 'y', 'z'])
+    df = pd.DataFrame(resol.y.T - sol2.y.T, columns=['x', 'y', 'z'])
+    
     errors = [np.sqrt((row**2).sum().sum()/(3*N)) for row in df.rolling(window=N, step=N)]
     
     return errors[3] # for now
@@ -90,7 +92,7 @@ from matplotlib import pyplot as plt
 fig,ax = plt.subplots()
 ax.plot(h*inputs,outputs, marker='.')
 ax.grid()
-ax.set(xlabel='Training time length $\Delta t$', ylabel='RMSE at $[3\Delta t,4\Delta t]$')
+ax.set(xlabel=r'Training time length $\Delta t$', ylabel=r'RMSE at $[3\Delta t,4\Delta t]$')
 fig.show()
 
 if False:
