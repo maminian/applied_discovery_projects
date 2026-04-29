@@ -13,7 +13,7 @@ def rhs(t,y, sigma=10, rho=28, beta=8/3):
     return np.array([sigma*(y[1]-y[0]), y[0]*(rho-y[2])-y[1], y[0]*y[1]-beta*y[2]])
 #
 
-t = np.linspace(0, 20,1000)
+t = np.linspace(0,40,2000)
 sol = sp.integrate.solve_ivp(rhs, t[[0,-1]], [1,2,3], t_eval = t)
 
 h = sol.t[1] - sol.t[0]
@@ -73,9 +73,25 @@ def paramsweep_fun(N=30):
     return errors[3] # for now
 #
 
-
+inputs = np.arange(30,300, dtype=int)
+outputs = np.zeros(np.shape(inputs))
+for i in range(len(inputs)):
+    try:
+        outputs[i] = paramsweep_fun(inputs[i])
+        print(f'{inputs[i]}, {outputs[i]:.3}')
+    except:
+        outputs[i] = np.nan
+        continue
+    
 #print(errors[:5])
 #
+
+from matplotlib import pyplot as plt
+fig,ax = plt.subplots()
+ax.plot(h*inputs,outputs, marker='.')
+ax.grid()
+ax.set(xlabel='Training time length $\Delta t$', ylabel='RMSE at $[3\Delta t,4\Delta t]$')
+fig.show()
 
 if False:
     if __name__=="__main__":
